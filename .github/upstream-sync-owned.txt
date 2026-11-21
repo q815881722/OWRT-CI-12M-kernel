@@ -31,3 +31,7 @@ Config/MEDIATEK-WIFI-YES.txt
 README.md
 .github/workflows/Release-Clean.yml
 .github/scripts/prune-releases.sh
+
+
+# ---- Nebula 大屏美化：内嵌文件（上游不存在，必须保留）----
+files/
