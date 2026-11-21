@@ -89,7 +89,7 @@ body{
 .stat{
   background:linear-gradient(160deg,color-mix(in srgb,var(--c) 8%,var(--panel)) 0%,var(--panel) 55%);
   border:1px solid var(--line);border-radius:14px;padding:15px 17px 4px;
-  position:relative;overflow:hidden;
+  position:relative;overflow:hidden;min-width:0;
   box-shadow:0 6px 22px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03);
   transition:transform .25s, box-shadow .25s
 }
@@ -101,7 +101,7 @@ body{
   background:color-mix(in srgb,var(--c) 16%,transparent);border:1px solid color-mix(in srgb,var(--c) 30%,transparent);
   box-shadow:0 0 14px color-mix(in srgb,var(--c) 22%,transparent)}
 .sico svg{width:19px;height:19px;fill:none;stroke:var(--c);stroke-width:2;filter:drop-shadow(0 0 4px var(--c))}
-.stat .sv{font-size:32px;font-weight:800;margin:10px 0 1px;letter-spacing:.5px;position:relative;z-index:1;
+.stat .sv{font-size:32px;font-weight:800;margin:10px 0 1px;letter-spacing:.5px;position:relative;z-index:1;white-space:nowrap;
   color:var(--c);text-shadow:0 0 18px color-mix(in srgb,var(--c) 45%,transparent);font-variant-numeric:tabular-nums}
 .stat .sv small{font-size:13px;font-weight:500;color:var(--txt2);text-shadow:none}
 .stat .ss{font-size:10.5px;color:var(--txt3);position:relative;z-index:1}
@@ -202,6 +202,44 @@ body{
 #chart-tip .tt-row b{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700}
 .mini-bars i:hover{filter:brightness(1.6);cursor:crosshair}
 @media(max-width:1200px){.stats,.fgrid{grid-template-columns:repeat(2,1fr)}.bgrid{grid-template-columns:1fr 1fr}}
+/* ---------- 手机 / 窄屏（关键：防止侧栏挤压主区导致文字竖排）---------- */
+@media(max-width:860px){
+  html,body{height:auto;overflow:auto}
+  .app{flex-direction:column;height:auto;min-height:100%}
+  .rail{width:100%;height:54px;flex-direction:row;gap:4px;padding:0 8px;overflow-x:auto;
+    border-right:0;border-bottom:1px solid var(--line)}
+  .rail .sp{display:none}
+  .main{order:1;flex:none;width:100%;overflow:visible;padding:14px 12px 16px}
+  .side{order:2;width:100%;flex:none;overflow:visible;border-right:0;border-top:1px solid var(--line);
+    padding:14px 12px 26px;display:grid;grid-template-columns:1fr;gap:10px}
+  .side-card{margin-bottom:0}
+  .stats{grid-template-columns:repeat(2,1fr);gap:10px}
+  .fgrid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .bgrid{grid-template-columns:1fr;gap:10px}
+  .topbar{flex-wrap:wrap;gap:10px;margin-bottom:14px}
+  .topbar h1{font-size:19px}
+  .topbar p{font-size:11px}
+  .stat{padding:12px 13px 2px;border-radius:12px;min-width:0}
+  .stat .sh{font-size:11px;gap:7px}
+  .stat .sv{font-size:24px;margin:8px 0 1px}
+  .stat .sv small{font-size:11px}
+  .sico{width:29px;height:29px;border-radius:9px}
+  .sico svg{width:15px;height:15px}
+  .stat canvas{height:30px}
+  .card{padding:13px;border-radius:12px;margin-bottom:12px}
+  .card-h{margin-bottom:9px;flex-wrap:wrap;gap:6px}
+  .card-h h2{font-size:12.5px}
+  .bigwrap{height:170px!important}
+  .legend{gap:10px;font-size:10px}
+  .chip{gap:9px;font-size:10px}
+  .foot{font-size:9.5px;margin-top:12px}
+}
+@media(max-width:430px){
+  .stats{grid-template-columns:1fr}
+  .fgrid{grid-template-columns:1fr}
+  .bigwrap{height:152px!important}
+  .stat .sv{font-size:26px}
+}
 /* embed mode: LuCI already provides the menu & top bar, so hide all
    standalone navigation/buttons to avoid a duplicated "second window" look */
 body.embed .rail,
@@ -211,6 +249,10 @@ body.embed .card .go,
 body.embed .foot .go{display:none !important}
 body.embed .main{padding:16px 20px}
 body.embed .topbar{margin-bottom:16px}
+@media(max-width:860px){
+  body.embed .main{padding:14px 12px 16px}
+  body.embed .topbar{margin-bottom:12px}
+}
 </style>
 </head>
 <body>
@@ -382,6 +424,26 @@ body.embed .topbar{margin-bottom:16px}
 <script>
 // embedded inside LuCI dashboard view -> drop the duplicate icon rail
 if (new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed');
+
+/* 嵌入 LuCI 时（尤其手机窄屏）：把内容真实高度告知父页面，让 iframe 自适应，
+   避免 iframe 内部再套一层滚动条、底部内容被截断 */
+(function(){
+  if (!new URLSearchParams(location.search).has('embed')) return;
+  var last = 0;
+  function notifyHeight(){
+    try {
+      if (window.innerWidth >= 900) return;      /* 宽屏保持固定高度 + 内部滚动 */
+      var h = Math.ceil(document.documentElement.scrollHeight);
+      if (h < 200 || Math.abs(h - last) < 4) return;
+      last = h;
+      parent.postMessage({ nebulaHeight: h }, '*');
+    } catch (e) {}
+  }
+  window.addEventListener('load', notifyHeight);
+  window.addEventListener('resize', notifyHeight);
+  if (window.ResizeObserver) { try { new ResizeObserver(notifyHeight).observe(document.body); } catch (e) {} }
+  setInterval(notifyHeight, 1200);
+})();
 const API='/cgi-bin/sysinfo';
 let hist={down:[],up:[],cli:[],ping:[]}, MAX=60;
 const $=id=>document.getElementById(id);
@@ -424,7 +486,7 @@ function drawBig(id,series,colors){
   const c=$(id),ctx=c.getContext('2d'),w=c.clientWidth,h=c.clientHeight;
   c.width=w*devicePixelRatio;c.height=h*devicePixelRatio;ctx.scale(devicePixelRatio,devicePixelRatio);
   ctx.clearRect(0,0,w,h);
-  const padL=44,padR=10,padT=12,padB=20;
+  const padL=44,padR=10,padT=20,padB=20;
   const pw=w-padL-padR, ph=h-padT-padB;
   const all=series.flat().filter(x=>x!=null);
   // "nice" rounded max so ticks are clean numbers
@@ -456,7 +518,7 @@ function drawBig(id,series,colors){
     ctx.fillText('-1 分',padL+pw/2,h-7);
     ctx.fillText('现在',w-padR,h-7);
     ctx.textAlign='left';ctx.fillStyle='#3d4a68';
-    ctx.fillText('Mbps',2,padT-3);
+    ctx.fillText('Mbps',2,6);
   }
   // series
   const pt=(v,i)=>[padL+i/(span-1)*pw, padT+ph-(Math.min(v,mx)/mx)*ph];
