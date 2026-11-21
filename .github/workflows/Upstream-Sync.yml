@@ -7,9 +7,9 @@ name: Upstream-Sync
 
 #CI计划
 on:
-  #自动同步：每天 UTC 18:30（北京时间 02:30）
+  #自动同步：每天 UTC 00:00（北京时间 08:00）
   schedule:
-    - cron: 30 18 * * *
+    - cron: '0 0 * * *'
 
   #手动同步
   workflow_dispatch:

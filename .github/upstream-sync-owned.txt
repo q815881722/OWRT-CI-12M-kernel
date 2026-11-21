@@ -8,6 +8,7 @@
 # 只想改冲突策略时改这个文件即可，无需动脚本。
 
 # ---- CI 工作流：本地做了触发方式/矩阵/清理/校验等定制 ----
+.github/workflows/Upstream-Sync.yml
 .github/workflows/WRT-CORE.yml
 .github/workflows/Auto-Clean.yml
 .github/workflows/Cache-Clean.yml
