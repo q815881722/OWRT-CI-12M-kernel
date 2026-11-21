@@ -1,0 +1,92 @@
+#!/bin/sh
+# Nebula dashboard data endpoint - REAL data from the router via ubus + jq.
+CUR_FILE=/tmp/.nebula_cur
+
+NOW=$(date +%s)
+read_bytes() {
+	awk '/(pppoe-wan|eth1):/ {
+		gsub(/:/,"",$1); gsub(/ /,"",$1);
+		print $1" "$2" "$10; exit
+	}' /proc/net/dev 2>/dev/null
+}
+CURB=$(read_bytes)
+IFACE=$(echo "$CURB" | awk '{print $1}')
+CUR_RX=$(echo "$CURB" | awk '{print $2}')
+CUR_TX=$(echo "$CURB" | awk '{print $3}')
+[ -z "$CUR_RX" ] && { CUR_RX=0; CUR_TX=0; IFACE=eth0; }
+
+if [ -f "$CUR_FILE" ]; then
+	read PIFACE PTIME PRX PTX < "$CUR_FILE"
+else
+	PIFACE="$IFACE"; PTIME=$NOW; PRX=$CUR_RX; PTX=$CUR_TX
+fi
+echo "$IFACE $NOW $CUR_RX $CUR_TX" > "$CUR_FILE"
+dt=$((NOW - PTIME)); [ "$dt" -lt 1 ] && dt=2
+drx=$((CUR_RX - PRX)); [ "$drx" -lt 0 ] && drx=0
+dtx=$((CUR_TX - PTX)); [ "$dtx" -lt 0 ] && dtx=0
+RX=$((drx / dt)); TX=$((dtx / dt))
+
+SYS=$(ubus call system info 2>/dev/null)
+BOARD=$(ubus call system board 2>/dev/null)
+IFACES=$(ubus call network.interface dump 2>/dev/null)
+THERMAL=$(ubus call luci.vantage thermal 2>/dev/null)
+WIRED=$(ubus call luci.vantage wired 2>/dev/null)
+
+# client counts
+CL_DHCP=$(cat /tmp/dhcp.leases 2>/dev/null | wc -l)
+CL_W24=$(iwinfo phy0-ap0 assoclist 2>/dev/null | grep -c 'dBm')
+CL_W5=$(iwinfo phy1-ap0 assoclist 2>/dev/null | grep -c 'dBm')
+CL_WIRED=$(echo "$WIRED" | jq '.hosts | length' 2>/dev/null || echo 0)
+[ -z "$CL_W24" ] && CL_W24=0; [ -z "$CL_W5" ] && CL_W5=0; [ -z "$CL_WIRED" ] && CL_WIRED=0
+
+# latency to DNS (cached, refresh every ~10s via file timestamp)
+PING_FILE=/tmp/.nebula_ping
+if [ ! -f "$PING_FILE" ] || [ $((NOW - $(stat -c %Y "$PING_FILE" 2>/dev/null || echo 0))) -gt 10 ]; then
+	PING_MS=$(ping -c 1 -W 2 223.5.5.5 2>/dev/null | grep -oE 'time=[0-9.]+' | head -1 | cut -d= -f2)
+	[ -z "$PING_MS" ] && PING_MS=0
+	echo "$PING_MS" > "$PING_FILE"
+fi
+PING_MS=$(cat "$PING_FILE" 2>/dev/null || echo 0)
+
+# storage
+OV_TOTAL=$(df -k /overlay 2>/dev/null | awk 'NR==2{print $2}')
+OV_USED=$(df -k /overlay 2>/dev/null | awk 'NR==2{print $3}')
+[ -z "$OV_TOTAL" ] && OV_TOTAL=1
+
+# firewall / services
+FW=$(nft list ruleset 2>/dev/null | grep -c 'chain' || echo 0)
+
+printf 'Content-Type: application/json; charset=utf-8\r\n\r\n'
+jq -n \
+  --argjson sys "$SYS" --argjson board "$BOARD" --argjson ifaces "$IFACES" \
+  --argjson thermal "$THERMAL" \
+  --argjson rx "$RX" --argjson tx "$TX" --arg iface "$IFACE" --argjson now "$NOW" \
+  --argjson dhcp "$CL_DHCP" --argjson w24 "$CL_W24" --argjson w5 "$CL_W5" \
+  --argjson wired "$CL_WIRED" --argjson ping "$PING_MS" --argjson fw "$FW" \
+  --argjson ovt "$OV_TOTAL" --argjson ovu "$OV_USED" \
+  '
+  ($ifaces.interface // []) as $ifs |
+  (($ifs[]? | select(.interface=="wan")) // {}) as $wan |
+  (($ifs[]? | select(.interface=="lan")) // {}) as $lan |
+  (($thermal.zones // [])[0].temp // 0) as $t |
+  {
+    hostname: ($board.hostname // "OpenWrt"),
+    model: ($board.model // ""),
+    kernel: ($board.kernel // ""),
+    release: ($board.release.version // ""),
+    uptime: ($sys.uptime // 0),
+    load1: (((($sys.load // [0,0,0])[0]) / 65536) * 100 | round / 100),
+    mem_total: ($sys.memory.total // 0),
+    mem_avail: ($sys.memory.available // 0),
+    cpu_temp: (($t / 1000) * 10 | round / 10),
+    wan_ip: (($wan["ipv4-address"] // [])[0].address // ""),
+    lan_ip: (($lan["ipv4-address"] // [])[0].address // ""),
+    dns: (($wan["dns-server"] // [])[0] // ""),
+    iface: $iface,
+    rx_bps: $rx, tx_bps: $tx,
+    clients: ($dhcp + $wired),
+    w24: $w24, w5: $w5, wired: $wired,
+    ping: $ping, fw_chains: $fw,
+    ov_total: $ovt, ov_used: $ovu,
+    ts: $now
+  }' 2>/dev/null || printf '{"error":"jq failed","rx_bps":%s,"tx_bps":%s}\n' "$RX" "$TX"

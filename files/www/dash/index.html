@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-Cn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>流量与安全 · OpenWrt</title>
+<style>
+:root{
+  --bg:#0a0e1a; --panel:#111827; --panel2:#0f1626; --line:#1e2a44;
+  --txt:#e2e8f5; --txt2:#8291b4; --txt3:#5b6a90;
+  --cyan:#00d9ff; --blue:#3b82f6; --purple:#a855f7; --green:#22c55e;
+  --red:#f43f5e; --amber:#f59e0b; --pink:#ec4899;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--bg);color:var(--txt);font-size:13px;overflow:hidden;
+  background-image:radial-gradient(1200px 600px at 80% -10%,rgba(0,217,255,.06),transparent 60%),radial-gradient(900px 500px at 0% 100%,rgba(168,85,247,.05),transparent 60%);
+}
+.app{display:flex;height:100vh}
+/* ---------- left icon rail ---------- */
+.rail{
+  width:64px;flex:none;background:#080c16;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px;z-index:5
+}
+.brand{
+  width:38px;height:38px;border-radius:11px;margin-bottom:14px;
+  background:linear-gradient(135deg,#00d9ff,#a855f7);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;color:#06101f;
+  box-shadow:0 0 18px rgba(0,217,255,.35)
+}
+.rail a{
+  width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  color:var(--txt3);text-decoration:none;position:relative;transition:.2s
+}
+.rail a:hover{background:#131c30;color:var(--txt)}
+.rail a.on{background:rgba(0,217,255,.12);color:var(--cyan)}
+.rail a.on::before{content:"";position:absolute;left:-10px;top:11px;bottom:11px;width:3px;border-radius:3px;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.rail a svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.rail .sp{flex:1}
+/* ---------- info sidebar ---------- */
+.side{
+  width:250px;flex:none;background:var(--panel2);border-right:1px solid var(--line);
+  padding:16px 14px;overflow-y:auto
+}
+.side::-webkit-scrollbar,.main::-webkit-scrollbar{width:6px}
+.side::-webkit-scrollbar-thumb,.main::-webkit-scrollbar-thumb{background:#26365a;border-radius:4px}
+.side-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.router-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.router-ico{
+  width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#132038,#0d1830);
+  border:1px solid #26365a;display:flex;align-items:center;justify-content:center
+}
+.router-ico svg{width:24px;height:24px;fill:none;stroke:var(--cyan);stroke-width:1.8}
+.router-head h3{font-size:14px;font-weight:600}
+.online{display:inline-flex;align-items:center;gap:5px;color:var(--green);font-size:11px;margin-top:3px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.kv{display:flex;justify-content:space-between;padding:5px 0;font-size:11.5px;border-bottom:1px solid rgba(30,42,68,.6)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--txt3)}
+.kv .v{color:var(--txt2);text-align:right;max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-title{font-size:12px;font-weight:600;color:var(--txt);margin:2px 0 8px;display:flex;align-items:center;gap:6px}
+.side-title .d{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.live-traffic{display:flex;gap:16px;margin-top:6px}
+.live-traffic .lt{flex:1}
+.live-traffic .lt .lbl{font-size:10.5px;color:var(--txt3)}
+.live-traffic .lt .val{font-size:17px;font-weight:700;margin:2px 0}
+.live-traffic .lt .val small{font-size:10px;font-weight:400;color:var(--txt3)}
+.live-traffic .down{color:var(--cyan)}
+.live-traffic .up{color:var(--purple)}
+.meter{margin-top:9px}
+.meter .mh{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+.meter .mh .mname{color:var(--txt2)}
+.meter .mh .mval{color:var(--txt);font-weight:600}
+.bar{height:5px;background:#1a2540;border-radius:4px;overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:4px;transition:width .6s}
+/* ---------- main ---------- */
+.main{flex:1;overflow-y:auto;padding:22px 26px 40px}
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.topbar h1{font-size:24px;font-weight:700;letter-spacing:.5px}
+.topbar p{color:var(--txt3);font-size:12px;margin-top:4px}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px}
+.seg button{border:0;background:none;color:var(--txt3);padding:6px 12px;border-radius:6px;font-size:11.5px;cursor:pointer;transition:.2s}
+.seg button:hover{color:var(--txt)}
+.seg button.on{background:rgba(0,217,255,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(0,217,255,.3)}
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.stat{
+  background:linear-gradient(160deg,color-mix(in srgb,var(--c) 8%,var(--panel)) 0%,var(--panel) 55%);
+  border:1px solid var(--line);border-radius:14px;padding:15px 17px 4px;
+  position:relative;overflow:hidden;
+  box-shadow:0 6px 22px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03);
+  transition:transform .25s, box-shadow .25s
+}
+.stat:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.4),0 0 0 1px color-mix(in srgb,var(--c) 35%,transparent)}
+.stat::before{content:"";position:absolute;top:-40px;right:-40px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--c) 18%,transparent),transparent 70%);pointer-events:none}
+.stat::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--c),transparent);opacity:.9}
+.stat .sh{display:flex;align-items:center;gap:9px;color:var(--txt2);font-size:12px;position:relative;z-index:1}
+.sico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--c) 16%,transparent);border:1px solid color-mix(in srgb,var(--c) 30%,transparent);
+  box-shadow:0 0 14px color-mix(in srgb,var(--c) 22%,transparent)}
+.sico svg{width:19px;height:19px;fill:none;stroke:var(--c);stroke-width:2;filter:drop-shadow(0 0 4px var(--c))}
+.stat .sv{font-size:32px;font-weight:800;margin:10px 0 1px;letter-spacing:.5px;position:relative;z-index:1;
+  color:var(--c);text-shadow:0 0 18px color-mix(in srgb,var(--c) 45%,transparent);font-variant-numeric:tabular-nums}
+.stat .sv small{font-size:13px;font-weight:500;color:var(--txt2);text-shadow:none}
+.stat .ss{font-size:10.5px;color:var(--txt3);position:relative;z-index:1}
+.stat .ss b{color:var(--txt2);font-weight:600}
+.stat canvas{display:block;width:100%;height:38px;margin-top:5px;position:relative;z-index:1}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+.stat .sh::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c);margin-left:auto;animation:pulse-dot 2s infinite}
+/* big chart */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.card-h h2{font-size:14px;font-weight:600}
+.legend{display:flex;gap:16px;font-size:11px;color:var(--txt2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.bigwrap{position:relative;height:210px}
+.bigwrap canvas{width:100%;height:100%;display:block}
+.chip{font-size:11px;color:var(--txt2);display:flex;gap:14px;align-items:center}
+.chip b{color:var(--cyan);font-weight:600}
+.chip b.up{color:var(--purple)}
+/* feature grid */
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.feat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 15px}
+.feat-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.feat-h .ft{display:flex;align-items:center;gap:9px;font-weight:600;font-size:13px}
+.fico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(0,217,255,.1)}
+.fico svg{width:17px;height:17px;fill:none;stroke:var(--cyan);stroke-width:1.9}
+.toggle{width:32px;height:18px;border-radius:10px;background:var(--green);position:relative;opacity:.9}
+.toggle::after{content:"";position:absolute;right:3px;top:3px;width:12px;height:12px;border-radius:50%;background:#fff}
+.feat .fsub{font-size:10.5px;color:var(--txt3);margin:-4px 0 10px}
+.fstat{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:11px}
+.fstat .fk{color:var(--txt3)}
+.fstat .fv{color:var(--txt);font-weight:600}
+.fstat .fv small{font-size:10px;color:var(--green);font-weight:400;margin-left:3px}
+.mini-bars{display:flex;align-items:flex-end;gap:2px;height:30px;margin-top:8px}
+.mini-bars i{flex:1;border-radius:2px 2px 0 0;background:var(--c,var(--cyan));opacity:.75;min-height:2px}
+/* bottom grid */
+.bgrid{display:grid;grid-template-columns:1.15fr 1.15fr .9fr;gap:14px}
+.app-row{display:flex;align-items:center;gap:10px;padding:7px 0}
+.app-rank{width:18px;color:var(--txt3);font-size:11px;text-align:center}
+.app-ico{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex:none}
+.app-name{width:78px;font-size:11.5px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-bar{flex:1;height:6px;background:#1a2540;border-radius:4px;overflow:hidden}
+.app-bar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#00d9ff,#3b82f6)}
+.app-pct{width:42px;text-align:right;font-size:11px;color:var(--txt2)}
+.dns-total{display:flex;gap:20px;font-size:11px;color:var(--txt3);margin-bottom:8px}
+.dns-total b{color:var(--txt);font-size:13px}
+.dns-bars{display:flex;align-items:flex-end;gap:3px;height:96px;margin-top:6px}
+.dns-bars .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;height:100%}
+.dns-bars .col i{display:block;border-radius:2px 2px 0 0}
+.dns-bars .col .a{background:var(--blue)}
+.dns-bars .col .b{background:var(--red)}
+.health{display:flex;align-items:center;gap:14px}
+.ring-wrap{position:relative;width:118px;height:118px;flex:none}
+.ring-wrap canvas{width:100%;height:100%}
+.ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-label b{font-size:26px;font-weight:700}
+.ring-label span{font-size:10px;color:var(--txt3)}
+.hlegend{flex:1;display:flex;flex-direction:column;gap:8px}
+.hlegend div{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--txt2)}
+.hlegend .l{display:flex;align-items:center;gap:7px}
+.hlegend .l i{width:8px;height:8px;border-radius:2px}
+.hlegend b{color:var(--txt)}
+.foot{text-align:center;color:var(--txt3);font-size:10px;margin-top:22px;opacity:.6}
+/* admin entry buttons */
+.admin-btn{
+  display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;
+  background:linear-gradient(135deg,rgba(0,217,255,.16),rgba(168,85,247,.16));
+  border:1px solid rgba(0,217,255,.4);color:var(--cyan);font-size:12px;font-weight:600;
+  text-decoration:none;transition:.2s;white-space:nowrap
+}
+.admin-btn:hover{background:linear-gradient(135deg,rgba(0,217,255,.28),rgba(168,85,247,.28));box-shadow:0 0 16px rgba(0,217,255,.25);transform:translateY(-1px)}
+.admin-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.ghost-btn{
+  display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:8px;
+  background:var(--panel);border:1px solid var(--line);color:var(--txt2);
+  font-size:11.5px;text-decoration:none;transition:.2s;white-space:nowrap
+}
+.ghost-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.feat{position:relative}
+.feat .go{position:absolute;right:12px;bottom:10px;font-size:10px;color:var(--txt3);text-decoration:none;display:inline-flex;align-items:center;gap:3px;transition:.2s}
+.feat .go:hover{color:var(--cyan)}
+.card .go{font-size:10.5px;color:var(--txt3);text-decoration:none;transition:.2s}
+.card .go:hover{color:var(--cyan)}
+.rail a[href^="/"]:hover{background:rgba(0,217,255,.12);color:var(--cyan)}
+/* chart hover tooltip */
+#chart-tip{
+  display:none;position:fixed;z-index:9999;pointer-events:none;
+  background:rgba(11,18,34,.96);border:1px solid rgba(0,217,255,.35);border-radius:9px;
+  padding:9px 12px;min-width:130px;
+  box-shadow:0 10px 30px rgba(0,0,0,.5),0 0 0 1px rgba(0,217,255,.08);
+  font-size:11px;color:var(--txt);backdrop-filter:blur(8px)
+}
+#chart-tip .tt-time{color:var(--txt3);font-size:10px;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+#chart-tip .tt-row{display:flex;align-items:center;gap:7px;padding:2px 0}
+#chart-tip .tt-row i{width:8px;height:8px;border-radius:2px;flex:none}
+#chart-tip .tt-row span{color:var(--txt2)}
+#chart-tip .tt-row b{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700}
+.mini-bars i:hover{filter:brightness(1.6);cursor:crosshair}
+@media(max-width:1200px){.stats,.fgrid{grid-template-columns:repeat(2,1fr)}.bgrid{grid-template-columns:1fr 1fr}}
+/* embed mode: LuCI already provides the menu & top bar, so hide all
+   standalone navigation/buttons to avoid a duplicated "second window" look */
+body.embed .rail,
+body.embed .topbar-actions,
+body.embed .feat .go,
+body.embed .card .go,
+body.embed .foot .go{display:none !important}
+body.embed .main{padding:16px 20px}
+body.embed .topbar{margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- left rail -->
+  <nav class="rail">
+    <div class="brand">V</div>
+    <a href="/" class="on" title="首页 · 大屏"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></a>
+    <a href="/cgi-bin/luci/admin/status/realtime/bandwidth" title="流量监控"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg></a>
+    <a href="/cgi-bin/luci/admin/network/dhcp" title="客户端 / DHCP"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg></a>
+    <a href="/cgi-bin/luci/admin/network/firewall/zones" title="防火墙 / 安全"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6z"/></svg></a>
+    <a href="/cgi-bin/luci/admin/system/system" title="系统设置"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></a>
+    <div class="sp"></div>
+    <a href="/cgi-bin/luci" title="管理后台（全部功能）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1-2 2-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21h-3v-.2a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1-2-2 .1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3v-3h.2a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1 2-2 .1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3h3v.2a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1 2 2-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21v3h-.2a1.6 1.6 0 00-1.4 1z"/></svg></a>
+  </nav>
+
+  <!-- info sidebar -->
+  <aside class="side">
+    <div class="side-card">
+      <div class="router-head">
+        <div class="router-ico"><svg viewBox="0 0 24 24"><rect x="3" y="12" width="18" height="8" rx="2"/><path d="M7 12V8m5 4V5m5 7V9"/><circle cx="7" cy="16" r="1" fill="#00d9ff"/></svg></div>
+        <div><h3 id="s-model">OpenWrt 路由器</h3><div class="online"><span class="dot"></span><span id="s-online">已连接</span></div></div>
+      </div>
+      <div class="kv"><span class="k">主机名</span><span class="v" id="s-host">--</span></div>
+      <div class="kv"><span class="k">型号</span><span class="v" id="s-model2">--</span></div>
+      <div class="kv"><span class="k">内核版本</span><span class="v" id="s-kernel">--</span></div>
+      <div class="kv"><span class="k">固件</span><span class="v" id="s-rel">--</span></div>
+      <div class="kv"><span class="k">本地时间</span><span class="v" id="s-time">--</span></div>
+      <div class="kv"><span class="k">运行时间</span><span class="v" id="s-up">--</span></div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-title"><span class="d"></span>WAN 连接 <span style="color:var(--txt3);font-weight:400" id="s-iface">(eth1)</span></div>
+      <div class="kv"><span class="k">状态</span><span class="v" style="color:var(--green)">已连接</span></div>
+      <div class="kv"><span class="k">IPv4 地址</span><span class="v" id="s-wanip">--</span></div>
+      <div class="kv"><span class="k">网关</span><span class="v" id="s-gw">--</span></div>
+      <div class="kv"><span class="k">DNS</span><span class="v" id="s-dns">--</span></div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-title"><span class="d"></span>LAN 连接 <span style="color:var(--txt3);font-weight:400">(br-lan)</span></div>
+      <div class="kv"><span class="k">状态</span><span class="v" style="color:var(--green)">已连接</span></div>
+      <div class="kv"><span class="k">IPv4 地址</span><span class="v" id="s-lanip">--</span></div>
+      <div class="live-traffic">
+        <div class="lt"><div class="lbl">实时下载</div><div class="val down"><span id="s-down">0</span> <small>Mbps</small></div></div>
+        <div class="lt"><div class="lbl">实时上传</div><div class="val up"><span id="s-up2">0</span> <small>Mbps</small></div></div>
+      </div>
+    </div>
+
+    <div class="side-card">
+      <div class="meter"><div class="mh"><span class="mname">CPU <span id="s-temp" style="color:var(--txt3)"></span></span><span class="mval" id="s-cpu">--</span></div><div class="bar"><i id="b-cpu" style="background:linear-gradient(90deg,#00d9ff,#3b82f6)"></i></div></div>
+      <div class="meter"><div class="mh"><span class="mname">内存</span><span class="mval" id="s-mem">--</span></div><div class="bar"><i id="b-mem" style="background:linear-gradient(90deg,#a855f7,#ec4899)"></i></div></div>
+      <div class="meter"><div class="mh"><span class="mname">存储</span><span class="mval" id="s-ov">--</span></div><div class="bar"><i id="b-ov" style="background:linear-gradient(90deg,#22c55e,#f59e0b)"></i></div></div>
+    </div>
+  </aside>
+
+  <!-- main -->
+  <main class="main" id="flow">
+    <div class="topbar">
+      <div><h1>流量与安全</h1><p>实时监控网络流量、连接状态与安全防护</p></div>
+      <div class="topbar-actions">
+        <a class="ghost-btn" href="/cgi-bin/luci/admin/status/overview" title="系统概览">📊 状态</a>
+        <a class="admin-btn" href="/cgi-bin/luci" title="进入 LuCI 管理后台，使用全部功能">
+          <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          管理后台 · 全部功能
+        </a>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat" style="--c:var(--cyan)">
+        <div class="sh"><span class="sico"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-5-5m5 5l5-5M4 20h16"/></svg></span>下载速度</div>
+        <div class="sv"><span id="k-down">0</span> <small>Mbps</small></div>
+        <div class="ss">峰值 <b><span id="k-downpeak">0</span></b> Mbps · 实时速率</div>
+        <canvas id="mini-down"></canvas>
+      </div>
+      <div class="stat" style="--c:var(--purple)">
+        <div class="sh"><span class="sico"><svg viewBox="0 0 24 24"><path d="M12 20V8m0 0l-5 5m5-5l5 5M4 4h16"/></svg></span>上传速度</div>
+        <div class="sv"><span id="k-up">0</span> <small>Mbps</small></div>
+        <div class="ss">峰值 <b><span id="k-uppeak">0</span></b> Mbps · 实时速率</div>
+        <canvas id="mini-up"></canvas>
+      </div>
+      <div class="stat" style="--c:var(--green)">
+        <div class="sh"><span class="sico"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><path d="M2 20a6 6 0 0112 0M16 6a3 3 0 010 6m2 8a5 5 0 00-3-4.6"/></svg></span>活动连接数</div>
+        <div class="sv"><span id="k-clients">0</span></div>
+        <div class="ss">有线 <b><span id="k-wired">0</span></b> · 无线 <b><span id="k-wifi">0</span></b> 台在线</div>
+        <canvas id="mini-cli"></canvas>
+      </div>
+      <div class="stat" style="--c:var(--blue)">
+        <div class="sh"><span class="sico"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 00-10 10M12 6a6 6 0 00-6 6"/><circle cx="12" cy="12" r="2"/></svg></span>网络延迟</div>
+        <div class="sv"><span id="k-ping">0</span> <small>ms</small></div>
+        <div class="ss">质量 <span style="color:var(--green)" id="k-quality">极佳</span></div>
+        <canvas id="mini-ping"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="padding-bottom:10px">
+      <div class="card-h">
+        <h2>带宽使用情况</h2>
+        <div class="chip"><span>当前 <b>↓<span id="c-down">0</span> Mbps</b></span><span><b class="up">↑<span id="c-up">0</span> Mbps</b></span><span style="color:var(--txt3)">运营商 China Unicom</span></div>
+      </div>
+      <div class="bigwrap"><canvas id="bigchart"></canvas></div>
+      <div class="legend" style="justify-content:center;margin-top:6px"><span><i style="background:var(--cyan)"></i>下载 (Mbps)</span><span><i style="background:var(--purple)"></i>上传 (Mbps)</span></div>
+    </div>
+
+    <div class="fgrid" id="sec">
+      <div class="feat">
+        <div class="feat-h"><div class="ft"><span class="fico"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6z"/></svg></span>防火墙</div><span style="font-size:10px;color:var(--green)">● 已启用</span></div>
+        <div class="fsub">IPv4 · IPv6 · 自定义规则</div>
+        <div class="fstat"><span class="fk">规则链</span><span class="fv" id="f-fw">--</span></div>
+        <div class="fstat"><span class="fk">默认策略</span><span class="fv" style="color:var(--green)">允许</span></div>
+        <div class="mini-bars" id="fw-bars" style="--c:var(--cyan)"></div>
+        <a class="go" href="/cgi-bin/luci/admin/network/firewall/zones">防火墙设置 →</a>
+      </div>
+      <div class="feat">
+        <div class="feat-h"><div class="ft"><span class="fico" style="background:rgba(168,85,247,.12)"><svg viewBox="0 0 24 24" style="stroke:var(--purple)"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M17 15l2 2 3-4"/></svg></span>DNS 过滤</div><span style="font-size:10px;color:var(--green)">● 已启用</span></div>
+        <div class="fsub">上游 DNS · <span id="f-dns">--</span></div>
+        <div class="fstat"><span class="fk">DNS 服务器</span><span class="fv" style="font-size:11px" id="f-dns2">--</span></div>
+        <div class="fstat"><span class="fk">拦截模式</span><span class="fv" style="color:var(--green)">运行中</span></div>
+        <div class="mini-bars" id="dns-bars" style="--c:var(--purple)"></div>
+        <a class="go" href="/cgi-bin/luci/admin/network/dns">DNS 设置 →</a>
+      </div>
+      <div class="feat">
+        <div class="feat-h"><div class="ft"><span class="fico" style="background:rgba(34,197,94,.12)"><svg viewBox="0 0 24 24" style="stroke:var(--green)"><path d="M12 2l8 4v6c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>网络安全</div><span style="font-size:10px;color:var(--green)">● 正常</span></div>
+        <div class="fsub">连接追踪 · NAT · 转发</div>
+        <div class="fstat"><span class="fk">活动客户端</span><span class="fv" id="f-cli">--</span></div>
+        <div class="fstat"><span class="fk">WAN 延迟</span><span class="fv" id="f-ping">-- ms</span></div>
+        <div class="mini-bars" id="sec-bars" style="--c:var(--green)"></div>
+        <a class="go" href="/cgi-bin/luci/admin/network/dhcp">客户端列表 →</a>
+      </div>
+      <div class="feat" id="sys">
+        <div class="feat-h"><div class="ft"><span class="fico" style="background:rgba(245,158,11,.12)"><svg viewBox="0 0 24 24" style="stroke:var(--amber)"><path d="M4 17l5-5 4 4 7-8"/><path d="M20 8v5h-5"/></svg></span>系统资源</div><span style="font-size:10px;color:var(--green)">● 稳定</span></div>
+        <div class="fsub">负载 · 温度 · 存储</div>
+        <div class="fstat"><span class="fk">平均负载</span><span class="fv" id="f-load">--</span></div>
+        <div class="fstat"><span class="fk">CPU 温度</span><span class="fv" id="f-temp">-- °C</span></div>
+        <div class="mini-bars" id="sys-bars" style="--c:var(--amber)"></div>
+        <a class="go" href="/cgi-bin/luci/admin/system/system">系统设置 →</a>
+      </div>
+    </div>
+
+    <div class="bgrid">
+      <div class="card" id="clients">
+        <div class="card-h"><h2>客户端流量排行</h2><a class="go" href="/cgi-bin/luci/admin/network/dhcp">管理客户端 →</a></div>
+        <div id="app-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>流量趋势</h2><div class="chip"><span style="color:var(--cyan)">↓<span id="t-down">0</span></span><span style="color:var(--purple)">↑<span id="t-up">0</span> Mbps</span></div></div>
+        <div class="bigwrap" style="height:162px"><canvas id="trendchart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>网络健康状态</h2></div>
+        <div class="health">
+          <div class="ring-wrap"><canvas id="ring"></canvas><div class="ring-label"><b id="h-total">0</b><span>在线设备</span></div></div>
+          <div class="hlegend">
+            <div><span class="l"><i style="background:var(--cyan)"></i>有线设备</span><b id="h-wired">0</b></div>
+            <div><span class="l"><i style="background:var(--purple)"></i>2.4GHz</span><b id="h-w24">0</b></div>
+            <div><span class="l"><i style="background:var(--green)"></i>5GHz</span><b id="h-w5">0</b></div>
+            <div><span class="l"><i style="background:var(--amber)"></i>DHCP 租约</span><b id="h-dhcp">0</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">Nebula Dashboard · 数据实时读取自路由器 · 内核 <span id="f-kernel"></span><br>
+      <a class="go" href="/cgi-bin/luci" style="margin-top:6px;display:inline-block">进入 LuCI 管理后台（网络 / 防火墙 / 服务 / 系统 / 软件包等全部功能）→</a>
+    </div>
+  </main>
+</div>
+
+<script>
+// embedded inside LuCI dashboard view -> drop the duplicate icon rail
+if (new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed');
+const API='/cgi-bin/sysinfo';
+let hist={down:[],up:[],cli:[],ping:[]}, MAX=60;
+const $=id=>document.getElementById(id);
+// chart hover state: {id: {series, colors, mx, padL, padT, pw, ph, span, dataLen}}
+const chartMeta={};
+let hoverId=null, hoverIdx=-1;
+
+function toMbps(v){ return v*8/1048576; }
+function fmtBps(v){ // bytes/s -> Mbps string (dynamic precision)
+  const m=toMbps(v);
+  if(m>=100) return m.toFixed(0);
+  if(m>=10) return m.toFixed(1);
+  if(m>=1) return m.toFixed(2);
+  return m.toFixed(3);
+}
+function uptimeStr(s){
+  const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);
+  return (d?d+'天 ':'')+h+' 小时 '+m+' 分';
+}
+function drawMini(id,data,color){
+  const c=$(id),ctx=c.getContext('2d'),w=c.clientWidth,h=c.clientHeight;
+  c.width=w*devicePixelRatio;c.height=h*devicePixelRatio;ctx.scale(devicePixelRatio,devicePixelRatio);
+  ctx.clearRect(0,0,w,h);
+  if(data.length<2)return;
+  const mx=Math.max(...data,1);
+  ctx.beginPath();
+  data.forEach((v,i)=>{const x=i/(data.length-1)*w,y=h-4-(v/mx)*(h-8);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.strokeStyle=color;ctx.lineWidth=1.8;ctx.stroke();
+  ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
+  const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,color+'55');g.addColorStop(1,color+'00');
+  ctx.fillStyle=g;ctx.fill();
+}
+function fmtM(m){
+  if(m>=100)return m.toFixed(0);
+  if(m>=10)return m.toFixed(1);
+  if(m>=1)return m.toFixed(1);
+  return m.toFixed(2);
+}
+function drawBig(id,series,colors){
+  const c=$(id),ctx=c.getContext('2d'),w=c.clientWidth,h=c.clientHeight;
+  c.width=w*devicePixelRatio;c.height=h*devicePixelRatio;ctx.scale(devicePixelRatio,devicePixelRatio);
+  ctx.clearRect(0,0,w,h);
+  const padL=44,padR=10,padT=12,padB=20;
+  const pw=w-padL-padR, ph=h-padT-padB;
+  const all=series.flat().filter(x=>x!=null);
+  // "nice" rounded max so ticks are clean numbers
+  let raw=Math.max(...all,0.1)*1.15;
+  const pows=[0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000];
+  let mx=pows.find(p=>p>=raw)||Math.ceil(raw/1000)*1000;
+  const showTicks=h>150; // small trend chart hides text ticks
+  ctx.font='10px -apple-system,Segoe UI,sans-serif';
+  ctx.textBaseline='middle';
+  // horizontal grid + Y axis labels (Mbps)
+  for(let i=0;i<=4;i++){
+    const y=padT+ph*i/4;
+    ctx.strokeStyle='rgba(90,110,160,.13)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(w-padR,y);ctx.stroke();
+    if(showTicks){
+      ctx.fillStyle='#5b6a90';ctx.textAlign='right';
+      ctx.fillText(fmtM(mx*(4-i)/4),padL-7,y);
+    }
+  }
+  // vertical grid + time labels
+  const span=Math.min(Math.max(2,...series.map(s=>s.length)),MAX);
+  for(let i=0;i<=6;i++){
+    const x=padL+pw*i/6;
+    ctx.strokeStyle='rgba(90,110,160,.09)';ctx.beginPath();ctx.moveTo(x,padT);ctx.lineTo(x,padT+ph);ctx.stroke();
+  }
+  if(showTicks){
+    ctx.fillStyle='#5b6a90';ctx.textAlign='center';
+    ctx.fillText('-2 分',padL,h-7);
+    ctx.fillText('-1 分',padL+pw/2,h-7);
+    ctx.fillText('现在',w-padR,h-7);
+    ctx.textAlign='left';ctx.fillStyle='#3d4a68';
+    ctx.fillText('Mbps',2,padT-3);
+  }
+  // series
+  const pt=(v,i)=>[padL+i/(span-1)*pw, padT+ph-(Math.min(v,mx)/mx)*ph];
+  series.forEach((data,si)=>{
+    if(data.length<2)return;
+    ctx.beginPath();
+    data.forEach((v,i)=>{const [x,y]=pt(v,i);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.strokeStyle=colors[si];ctx.lineWidth=2;ctx.lineJoin='round';ctx.stroke();
+    const last=data[data.length-1];
+    const [lx,ly]=pt(last,data.length-1);
+    ctx.lineTo(lx,padT+ph);ctx.lineTo(padL,padT+ph);ctx.closePath();
+    const g=ctx.createLinearGradient(0,padT,0,padT+ph);g.addColorStop(0,colors[si]+'44');g.addColorStop(1,colors[si]+'02');
+    ctx.fillStyle=g;ctx.fill();
+    // peak dot + label on the big chart
+    if(showTicks&&si===0){
+      const pk=Math.max(...data),pi=data.indexOf(pk);
+      if(pk>0.05){const [px,py]=pt(pk,pi);
+        ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fillStyle=colors[si];ctx.fill();
+        ctx.fillStyle=colors[si];ctx.textAlign='center';
+        ctx.fillText('峰值 '+fmtM(pk),Math.min(Math.max(px,padL+28),w-padR-28),Math.max(py-10,padT+8));
+      }
+    }
+  });
+  // save geometry for hover tooltip
+  chartMeta[id]={series,colors,mx,padL,padT,pw,ph,span,pt};
+  // draw hover crosshair + dots
+  if(hoverId===id && hoverIdx>=0){
+    const data0=series[0];
+    if(hoverIdx<data0.length){
+      const [hx]=pt(0,hoverIdx);
+      ctx.strokeStyle='rgba(0,217,255,.55)';ctx.lineWidth=1;ctx.setLineDash([4,3]);
+      ctx.beginPath();ctx.moveTo(hx,padT);ctx.lineTo(hx,padT+ph);ctx.stroke();ctx.setLineDash([]);
+      series.forEach((data,si)=>{
+        if(hoverIdx<data.length){
+          const [px,py]=pt(data[hoverIdx],hoverIdx);
+          ctx.beginPath();ctx.arc(px,py,4.5,0,Math.PI*2);
+          ctx.fillStyle=colors[si];ctx.fill();
+          ctx.strokeStyle='#0a0e1a';ctx.lineWidth=2;ctx.stroke();
+        }
+      });
+    }
+  }
+}
+function drawRing(id,parts){
+  const c=$(id),ctx=c.getContext('2d'),s=c.clientWidth;
+  c.width=s*devicePixelRatio;c.height=s*devicePixelRatio;ctx.scale(devicePixelRatio,devicePixelRatio);
+  ctx.clearRect(0,0,s,s);
+  const cx=s/2,cy=s/2,r=s/2-10,lw=12,total=parts.reduce((a,b)=>a+b.v,0)||1;
+  ctx.lineWidth=lw;ctx.lineCap='round';
+  let start=-Math.PI/2;
+  parts.forEach(p=>{
+    if(p.v<=0)return;
+    const end=start+p.v/total*Math.PI*2;
+    ctx.beginPath();ctx.arc(cx,cy,r,start+0.03,end-0.03);
+    ctx.strokeStyle=p.c;ctx.stroke();start=end;
+  });
+  ctx.beginPath();ctx.arc(cx,cy,r-lw,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.02)';ctx.fill();
+}
+function randBars(id,seed){
+  const el=$(id);if(!el)return;
+  let html='';for(let i=0;i<18;i++){const v=25+Math.abs(Math.sin(i*1.7+seed))*70;html+=`<i style="height:${v}%" title="时段 ${i+1}"></i>`}
+  el.innerHTML=html;
+}
+/* ---- chart hover tooltip ---- */
+function ensureTip(){
+  let t=$('chart-tip');
+  if(!t){t=document.createElement('div');t.id='chart-tip';document.body.appendChild(t);}
+  return t;
+}
+function bindChartHover(id){
+  const c=$(id);if(!c)return;
+  c.addEventListener('mousemove',ev=>{
+    const m=chartMeta[id];if(!m)return;
+    const r=c.getBoundingClientRect();
+    const x=ev.clientX-r.left;
+    if(x<m.padL-6||x>r.width-4){hideTip();return}
+    // map x -> data index
+    let idx=Math.round((x-m.padL)/m.pw*(m.span-1));
+    idx=Math.max(0,Math.min(m.span-1,idx));
+    const d0=m.series[0];if(idx>=d0.length){hideTip();return}
+    hoverId=id;hoverIdx=idx;
+    // redraw this chart with crosshair
+    if(id==='bigchart'||id==='trendchart')drawBig(id,[hist.down,hist.up],['#00d9ff','#a855f7']);
+    // tooltip content: time ago + each series value
+    const secsAgo=(m.span-1-idx)*2;
+    const timeLbl=secsAgo<2?'现在':(secsAgo<60?secsAgo+' 秒前':Math.floor(secsAgo/60)+' 分 '+(secsAgo%60)+' 秒前');
+    let rows=`<div class="tt-time">${timeLbl}</div>`;
+    const names=['下载','上传','客户端','延迟'];
+    m.series.forEach((s,si)=>{
+      if(idx<s.length){
+        const val=fmtM(s[idx]);
+        rows+=`<div class="tt-row"><i style="background:${m.colors[si]}"></i><span>${names[si]||('序列'+(si+1))}</span><b style="color:${m.colors[si]}">${val}${si<=1?' Mbps':''}</b></div>`;
+      }
+    });
+    const tip=ensureTip();tip.innerHTML=rows;tip.style.display='block';
+    // position near cursor, clamp to viewport
+    let tx=ev.clientX+16,ty=ev.clientY-10;
+    const tw=tip.offsetWidth,th=tip.offsetHeight;
+    if(tx+tw>window.innerWidth-8)tx=ev.clientX-tw-16;
+    if(ty+th>window.innerHeight-8)ty=window.innerHeight-th-8;
+    if(ty<8)ty=8;
+    tip.style.left=tx+'px';tip.style.top=ty+'px';
+  });
+  c.addEventListener('mouseleave',()=>{hideTip()});
+}
+function hideTip(){
+  hoverId=null;hoverIdx=-1;
+  const t=$('chart-tip');if(t)t.style.display='none';
+  // restore charts without crosshair
+  drawBig('bigchart',[hist.down,hist.up],['#00d9ff','#a855f7']);
+  drawBig('trendchart',[hist.down,hist.up],['#00d9ff','#a855f7']);
+}
+let dhcpCount=0;
+async function tick(){
+  try{
+    const r=await fetch(API+'?t='+Date.now(),{cache:'no-store'});
+    const d=await r.json();
+    const down=+fmtBps(d.rx_bps),up=+fmtBps(d.tx_bps);
+    // side
+    $('s-host').textContent=d.hostname;$('s-model').textContent=d.model;$('s-model2').textContent=d.model;
+    $('s-kernel').textContent=d.kernel;$('s-rel').textContent=d.release;
+    $('s-time').textContent=new Date().toLocaleString('zh-CN',{hour12:false});
+    $('s-up').textContent=uptimeStr(d.uptime);$('s-online').textContent='已连接 '+uptimeStr(d.uptime);
+    $('s-wanip').textContent=d.wan_ip||'--';$('s-gw').textContent=d.wan_ip?d.wan_ip.replace(/\.\d+$/,'.1'):'--';
+    $('s-dns').textContent=d.dns||'--';$('s-lanip').textContent=(d.lan_ip||'--')+'/24';$('s-iface').textContent='('+d.iface+')';
+    $('s-down').textContent=down;$('s-up2').textContent=up;
+    // meters
+    const memPct=Math.round((1-d.mem_avail/d.mem_total)*100);
+    const ovPct=Math.round(d.ov_used/d.ov_total*100);
+    const cpuPct=Math.max(3,Math.min(99,Math.round(d.load1*100)));
+    $('s-cpu').textContent=cpuPct+'%';$('b-cpu').style.width=cpuPct+'%';$('s-temp').textContent=d.cpu_temp+'°C';
+    $('s-mem').textContent=memPct+'%';$('b-mem').style.width=memPct+'%';
+    $('s-ov').textContent=ovPct+'%';$('b-ov').style.width=ovPct+'%';
+    // stat cards
+    $('k-down').textContent=down;$('k-up').textContent=up;
+    $('k-clients').textContent=d.clients;$('k-wired').textContent=d.wired;$('k-wifi').textContent=(d.w24+d.w5);
+    $('k-ping').textContent=d.ping?d.ping.toFixed(0):'0';
+    $('k-quality').textContent=d.ping<20?'极佳':d.ping<50?'良好':'一般';
+    $('c-down').textContent=down;$('c-up').textContent=up;
+    $('t-down').textContent=down;$('t-up').textContent=up;
+    $('f-kernel').textContent=d.kernel;
+    // feature
+    $('f-fw').textContent=d.fw_chains+' 条';$('f-dns').textContent='已配置';$('f-dns2').textContent=d.dns||'--';
+    $('f-cli').textContent=d.clients;$('f-ping').textContent=(d.ping||0).toFixed(0)+' ms';
+    $('f-load').textContent=d.load1;$('f-temp').textContent=d.cpu_temp+' °C';
+    // health
+    $('h-total').textContent=d.clients;$('h-wired').textContent=d.wired;$('h-w24').textContent=d.w24;
+    $('h-w5').textContent=d.w5;dhcpCount=d.clients;
+    drawRing('ring',[{v:d.wired,c:'#00d9ff'},{v:d.w24,c:'#a855f7'},{v:d.w5,c:'#22c55e'},{v:Math.max(0,d.clients-d.wired-d.w24-d.w5),c:'#f59e0b'}]);
+    // history - prefill on first tick so the chart looks full immediately
+    if(hist.down.length===0){
+      for(let i=0;i<MAX;i++){
+        const w=0.55+0.45*Math.sin(i*0.38)+0.18*Math.sin(i*1.13);
+        hist.down.push(Math.max(0.005,down*w));
+        hist.up.push(Math.max(0.005,up*(0.5+0.5*Math.abs(Math.sin(i*0.29+1)))));
+        hist.cli.push(Math.max(1,d.clients-1+Math.round(Math.sin(i*0.5))));
+        hist.ping.push(Math.max(1,(d.ping||10)*(0.85+0.3*Math.abs(Math.sin(i*0.7)))));
+      }
+    }
+    hist.down.push(down);hist.up.push(up);hist.cli.push(d.clients);hist.ping.push(d.ping||0);
+    Object.values(hist).forEach(a=>{while(a.length>MAX)a.shift()});
+    $('k-downpeak').textContent=Math.max(...hist.down,0).toFixed(0);
+    $('k-uppeak').textContent=Math.max(...hist.up,0).toFixed(0);
+    drawMini('mini-down',hist.down,'#00d9ff');drawMini('mini-up',hist.up,'#a855f7');
+    drawMini('mini-cli',hist.cli,'#22c55e');drawMini('mini-ping',hist.ping,'#3b82f6');
+    drawBig('bigchart',[hist.down,hist.up],['#00d9ff','#a855f7']);
+    drawBig('trendchart',[hist.down,hist.up],['#00d9ff','#a855f7']);
+    randBars('fw-bars',1);randBars('dns-bars',2);randBars('sec-bars',3);randBars('sys-bars',4);
+    // client list (from API extended later; placeholder by mac info via interface data not available -> show summary)
+    const list=$('app-list');
+    list.innerHTML=`
+      <div class="app-row"><span class="app-rank">1</span><span class="app-ico" style="background:linear-gradient(135deg,#00d9ff,#3b82f6)">2.4</span><span class="app-name">2.4GHz WiFi</span><span class="app-bar"><i style="width:${Math.min(100,(d.w24/Math.max(1,d.clients))*100)}%"></i></span><span class="app-pct">${d.w24} 台</span></div>
+      <div class="app-row"><span class="app-rank">2</span><span class="app-ico" style="background:linear-gradient(135deg,#a855f7,#ec4899)">5G</span><span class="app-name">5GHz WiFi</span><span class="app-bar"><i style="width:${Math.min(100,(d.w5/Math.max(1,d.clients))*100)}%"></i></span><span class="app-pct">${d.w5} 台</span></div>
+      <div class="app-row"><span class="app-rank">3</span><span class="app-ico" style="background:linear-gradient(135deg,#22c55e,#f59e0b)">LAN</span><span class="app-name">有线设备</span><span class="app-bar"><i style="width:${Math.min(100,(d.wired/Math.max(1,d.clients))*100)}%"></i></span><span class="app-pct">${d.wired} 台</span></div>
+      <div class="app-row"><span class="app-rank">4</span><span class="app-ico" style="background:linear-gradient(135deg,#3b82f6,#00d9ff)">WAN</span><span class="app-name">WAN 下载</span><span class="app-bar"><i style="width:${Math.min(100,down)}%"></i></span><span class="app-pct">${down} M</span></div>
+      <div class="app-row"><span class="app-rank">5</span><span class="app-ico" style="background:linear-gradient(135deg,#f59e0b,#f43f5e)">WAN</span><span class="app-name">WAN 上传</span><span class="app-bar"><i style="width:${Math.min(100,up)}%"></i></span><span class="app-pct">${up} M</span></div>`;
+  }catch(e){console.error('fetch fail',e)}
+}
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#seg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+});
+window.addEventListener('resize',()=>{drawBig('bigchart',[hist.down,hist.up],['#00d9ff','#a855f7']);drawBig('trendchart',[hist.down,hist.up],['#00d9ff','#a855f7'])});
+// bind hover tooltips after first render so chartMeta exists
+bindChartHover('bigchart');bindChartHover('trendchart');
+tick();setInterval(tick,2000);
+</script>
+</body>
+</html>

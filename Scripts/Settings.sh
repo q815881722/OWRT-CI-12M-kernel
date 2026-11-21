@@ -379,3 +379,41 @@ echo "CONFIG_TARGET_ROOTFS_INITRAMFS=n" >> ./.config
 echo "CONFIG_PACKAGE_coreutils-od=y" >> ./.config
 # Mosdns
 echo "CONFIG_PACKAGE_luci-app-mosdns=y" >> ./.config
+
+########################################
+# Nebula 大屏仪表板（自定义视觉层，数据逻辑走原生 ubus）
+# - files/ 由 OpenWrt 标准机制合并进根文件系统
+# - 菜单把「仪表板」指向 nebula/dash 视图
+# - 强制深色 + 中文
+########################################
+if [ -d "$GITHUB_WORKSPACE/files" ]; then
+	echo "Applying Nebula dashboard overlay files..."
+	mkdir -p ./files
+	cp -af "$GITHUB_WORKSPACE/files/." ./files/
+	chmod +x ./files/www/cgi-bin/sysinfo 2>/dev/null || true
+fi
+NEBULA_MENU="./feeds/luci/applications/luci-app-vantage/root/usr/share/luci/menu.d/zz-luci-app-vantage.json"
+if [ ! -f "$NEBULA_MENU" ]; then
+	NEBULA_MENU=$(find ./feeds ./package -type f -name 'zz-luci-app-vantage.json' 2>/dev/null | head -1)
+fi
+if [ -f "$NEBULA_MENU" ] && command -v jq >/dev/null 2>&1; then
+	jq '."admin/dashboard".action.path="nebula/dash" | ."admin/dashboard".title="仪表板"' "$NEBULA_MENU" > "$NEBULA_MENU.nebula" 2>/dev/null && {
+		cat "$NEBULA_MENU.nebula" > "$NEBULA_MENU"
+		rm -f "$NEBULA_MENU.nebula"
+		echo "Nebula: dashboard menu patched"
+	}
+fi
+# 首次开机默认深色主题（vantage.theme=dark）通过 uci-defaults 落地
+NEBULA_UCI="./files/etc/uci-defaults"
+mkdir -p "$NEBULA_UCI"
+cat > "$NEBULA_UCI/99-nebula-theme" <<'NEOF'
+#!/bin/sh
+uci -q set luci.main.mediaurlbase='/luci-static/vantage'
+uci -q set vantage.theme='dark'
+uci -q set luci.main.lang='zh_cn'
+uci commit luci 2>/dev/null
+uci commit vantage 2>/dev/null
+exit 0
+NEOF
+chmod +x "$NEBULA_UCI/99-nebula-theme"
+echo "Nebula setup done"
